@@ -1,0 +1,40 @@
+# Visual Studio / Qt local state
+.vs/
+*.user
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.VC.opendb
+
+# Build outputs
+Debug/
+Release/
+x64/
+x86/
+build/
+*.obj
+*.iobj
+*.ipdb
+*.pdb
+*.ilk
+*.idb
+*.exe
+*.dll
+*.lib
+*.exp
+
+# Generated resource/editor artifacts
+*.aps
+
+# Runtime logs and exported scan samples
+Log/
+*.log
+dataset*.csv
+dataset*.png
+heatmap.png
+
+# Local backup archives
+*.zip
+*.7z
+*.rar

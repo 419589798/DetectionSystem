@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.35826.135
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DetectionSystem", "DetectionSystem.vcxproj", "{049D7813-FFD9-4467-ADA8-5C6BA5865C3F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x86 = Debug|x86
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{049D7813-FFD9-4467-ADA8-5C6BA5865C3F}.Debug|x86.ActiveCfg = Debug|Win32
+		{049D7813-FFD9-4467-ADA8-5C6BA5865C3F}.Debug|x86.Build.0 = Debug|Win32
+		{049D7813-FFD9-4467-ADA8-5C6BA5865C3F}.Release|x86.ActiveCfg = Release|Win32
+		{049D7813-FFD9-4467-ADA8-5C6BA5865C3F}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AF65118F-F7F2-4F34-B7B7-50B19EE91EC7}
+	EndGlobalSection
+EndGlobal
