@@ -944,7 +944,7 @@ QPushButton:disabled {
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="btnCSV">
+             <widget class="QPushButton" name="btnImportCSV">
               <property name="minimumSize">
                <size>
                 <width>100</width>
@@ -972,7 +972,7 @@ color: rgb(255, 255, 255);
 background-color: rgb(85, 170, 255);</string>
               </property>
               <property name="text">
-               <string>导出CSV</string>
+               <string>导入CSV</string>
               </property>
              </widget>
             </item>

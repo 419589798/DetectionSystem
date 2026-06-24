@@ -542,6 +542,7 @@ void DebugPage::returnPressedMaxCount(){
 
     QLineEdit* pEdit = qobject_cast<QLineEdit*>(sender());
     setConfig(MAX_COUNT,pEdit->text());
+    g_maxCount = pEdit->text();
 }
 void DebugPage::returnPressedXHOME(){
     QByteArray params;

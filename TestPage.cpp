@@ -37,6 +37,36 @@ static QString appendTimestampToFileName(const QString& filePath, const QString&
 
     return fileInfo.dir().filePath(stampedName);
 }
+static bool parseCoordText(const QString& text, double& x, double& y)
+{
+    QString coordText = text.trimmed();
+    coordText.remove(QChar(0xFEFF));
+    coordText.remove("(");
+    coordText.remove(")");
+    coordText.remove(QString::fromWCharArray(L"（"));
+    coordText.remove(QString::fromWCharArray(L"）"));
+
+    QStringList parts = coordText.split(QRegExp("[,，]"), QString::SkipEmptyParts);
+    if (parts.size() != 2)
+        return false;
+
+    bool xOk = false;
+    bool yOk = false;
+    x = parts.at(0).trimmed().toDouble(&xOk);
+    y = parts.at(1).trimmed().toDouble(&yOk);
+    return xOk && yOk;
+}
+
+static QString nextNonEmptyCell(const QStringList& cells, int labelIndex)
+{
+    for (int i = labelIndex + 1; i < cells.size(); ++i) {
+        QString cell = cells.at(i).trimmed();
+        cell.remove(QChar(0xFEFF));
+        if (!cell.isEmpty())
+            return cell;
+    }
+    return QString();
+}
 TestPage::TestPage(QWidget *parent)
 	: QWidget(parent)
 {
@@ -118,7 +148,13 @@ TestPage::TestPage(QWidget *parent)
         pt.x = x;
         pt.y = y;
         pt.value = value;
-        m_data.append(pt);
+
+        if (x == 4 && y == 4)
+        {
+            qDebug() << __FILE__ << __LINE__ << x << y << value;
+        }
+        else
+            m_data.append(pt);
 
         m_heatmapWidget->setGridValue(x, y, value);
         gradientIndex = (gradientIndex + 1) % (cols * rows);
@@ -130,7 +166,6 @@ TestPage::TestPage(QWidget *parent)
     m_minDeviation = ui.lineEdit_minCount->text().toDouble();
     m_maxDeviation = ui.lineEdit_maxCount->text().toDouble();
     updateHeatmapRangeFromDeviation();
-    ui.btnCSV->setVisible(false);
 }
 
 TestPage::~TestPage()
@@ -149,7 +184,9 @@ void TestPage::onScanStartClicked()
         if (!promptSaveScanData())
             return;
 
-        returnPressedScanCoord();
+        if (!returnPressedScanCoord())
+            return;
+
         m_scanStartTime = QDateTime::currentDateTime();
 
         ui.btnScanStart->setText("停止扫描");
@@ -203,7 +240,7 @@ void TestPage::returnPressedScanCoordNew()
 
         int maxCount = g_maxCount.toInt();
         int scanCount = (xZoom / valueZoom) * (yZoom / valueZoom);
-        if (maxCount < scanCount)
+        if ((maxCount < scanCount)&& maxCount!=0)
         {
             auto ret = QMessageBox::question(this,
                 "采样数确认",
@@ -250,7 +287,7 @@ void TestPage::returnPressedScanCoordNew()
 }
 
 // 更新扫描坐标参数
-void TestPage::returnPressedScanCoord()
+bool TestPage::returnPressedScanCoord()
 {
     double iMinXNew = ui.lineEdit_start_X->text().toDouble();
     double iMaxXNew = ui.lineEdit_end_X->text().toDouble();
@@ -260,7 +297,7 @@ void TestPage::returnPressedScanCoord()
     if (iMinXNew>iMaxXNew || iMinYNew>iMaxYNew)
     {
         QMessageBox::critical(this, "错误", "起始坐标不能大于终止坐标");
-        return;
+        return false;
     }
     
     if (ui.lineEdit_start_X->text().isEmpty() || 
@@ -269,7 +306,7 @@ void TestPage::returnPressedScanCoord()
         ui.lineEdit_end_Y->text().isEmpty()) 
     {
         QMessageBox::critical(this, "错误", "坐标不能为空");
-        return ;
+        return false;
     }
 
     quint16 iMinX = iMinXNew * 100;
@@ -282,7 +319,7 @@ void TestPage::returnPressedScanCoord()
     if (ui.lineEdit_scanStep->text().isEmpty())
     {
         QMessageBox::critical(this, "错误", "步进不能为空");
-        return ;
+        return false;
     }
     else
     {
@@ -294,7 +331,7 @@ void TestPage::returnPressedScanCoord()
         
         int maxCount = g_maxCount.toInt();
         int scanCount = (xZoom / valueZoom) * (yZoom / valueZoom);
-        if (maxCount < scanCount)
+        if ((maxCount < scanCount) && maxCount != 0)
         {
             auto ret = QMessageBox::question(this,
                 "采样数确认",
@@ -302,14 +339,14 @@ void TestPage::returnPressedScanCoord()
                 QMessageBox::Yes | QMessageBox::No);
 
             if (ret == QMessageBox::No) {
-                return;
+                return false;
             }
         }
 
         if ((xZoom % valueZoom) != 0 ||(yZoom % valueZoom) != 0 )
         {
             QMessageBox::critical(this, "错误", "步进不能被扫描范围整除");
-            return ;
+            return false;
         }
 
         // 设置步进
@@ -366,6 +403,7 @@ void TestPage::returnPressedScanCoord()
             returnXYValue(i, j, i*j);
         }
     }*/
+    return true;
 }
 
 
@@ -504,8 +542,233 @@ void TestPage::on_btnImg_clicked() {
     exportScanDataWithDialog();
 }
 
-void TestPage::on_btnCSV_clicked() {
-    exportScanDataWithDialog();
+void TestPage::on_btnImportCSV_clicked() {
+    QString filePath = QFileDialog::getOpenFileName(
+        this,
+        "导入CSV文件",
+        QString(),
+        "CSV文件 (*.csv);;文本文件 (*.txt);;所有文件 (*.*)");
+
+    if (filePath.isEmpty())
+        return;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "错误", "无法打开CSV文件");
+        return;
+    }
+
+    QTextStream stream(&file);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    stream.setCodec("UTF-8");
+#else
+    stream.setEncoding(QStringConverter::Utf8);
+#endif
+
+    QStringList lines;
+    while (!stream.atEnd())
+        lines.append(stream.readLine());
+    file.close();
+
+    if (lines.isEmpty()) {
+        QMessageBox::warning(this, "错误", "CSV文件为空");
+        return;
+    }
+
+    QStringList metaCells = lines.first().split(",");
+    double startX = 0.0;
+    double startY = 0.0;
+    double endX = 0.0;
+    double endY = 0.0;
+    double scanStep = 0.0;
+    QString scanTimeText;
+    bool hasStart = false;
+    bool hasEnd = false;
+    bool hasStep = false;
+
+    for (int i = 0; i < metaCells.size(); ++i) {
+        QString cell = metaCells.at(i).trimmed();
+        cell.remove(QChar(0xFEFF));
+
+        if (cell.contains("扫描时间")) {
+            scanTimeText = nextNonEmptyCell(metaCells, i);
+        } else if (cell.contains("起始坐标")) {
+            hasStart = parseCoordText(nextNonEmptyCell(metaCells, i), startX, startY);
+        } else if (cell.contains("截止坐标")) {
+            hasEnd = parseCoordText(nextNonEmptyCell(metaCells, i), endX, endY);
+        } else if (cell.contains("步进频率")) {
+            QString stepText = nextNonEmptyCell(metaCells, i);
+            stepText.remove("mm", Qt::CaseInsensitive);
+            bool ok = false;
+            scanStep = stepText.trimmed().toDouble(&ok);
+            hasStep = ok;
+        }
+    }
+
+    if (scanTimeText.isEmpty() && metaCells.size() > 1)
+        scanTimeText = metaCells.at(1).trimmed();
+    if (!hasStart && metaCells.size() > 3)
+        hasStart = parseCoordText(metaCells.at(3), startX, startY);
+    if (!hasEnd && metaCells.size() > 6)
+        hasEnd = parseCoordText(metaCells.at(6), endX, endY);
+    if (!hasStep && metaCells.size() > 9) {
+        QString stepText = metaCells.at(9).trimmed();
+        stepText.remove("mm", Qt::CaseInsensitive);
+        bool ok = false;
+        scanStep = stepText.toDouble(&ok);
+        hasStep = ok;
+    }
+
+    if (!hasStart || !hasEnd || !hasStep || scanStep <= 0.0 || startX >= endX || startY >= endY) {
+        QMessageBox::warning(this, "错误", "CSV头部信息不完整或格式错误");
+        return;
+    }
+
+    QVector<QVector<float>> values;
+    QVector<QVector<bool>> hasValues;
+    int maxCols = 0;
+
+    for (int i = 1; i < lines.size(); ++i) {
+        QString line = lines.at(i).trimmed();
+        if (line.isEmpty())
+            continue;
+
+        QStringList cells = line.split(",");
+        QVector<float> rowValues;
+        QVector<bool> rowHasValues;
+        bool rowHasData = false;
+
+        for (const QString& rawCell : cells) {
+            QString cell = rawCell.trimmed();
+            cell.remove(QChar(0xFEFF));
+
+            bool ok = false;
+            float value = cell.toFloat(&ok);
+            rowValues.append(ok ? value : 0.0f);
+            rowHasValues.append(ok);
+            rowHasData = rowHasData || ok;
+        }
+
+        if (rowHasData) {
+            maxCols = qMax(maxCols, rowValues.size());
+            values.append(rowValues);
+            hasValues.append(rowHasValues);
+        }
+    }
+
+    if (values.isEmpty() || maxCols <= 0) {
+        QMessageBox::warning(this, "错误", "CSV中没有可导入的数据");
+        return;
+    }
+
+    int iMinX = qRound(startX * 100.0);
+    int iMaxX = qRound(endX * 100.0);
+    int iMinY = qRound(startY * 100.0);
+    int iMaxY = qRound(endY * 100.0);
+    int valueZoom = qRound(scanStep * 100.0);
+
+    int expectedCols = (iMaxX - iMinX) / valueZoom;
+    int expectedRows = (iMaxY - iMinY) / valueZoom;
+    if (expectedCols <= 0 || expectedRows <= 0) {
+        QMessageBox::warning(this, "错误", "CSV坐标范围或步进无法生成有效网格");
+        return;
+    }
+
+    if (expectedCols != maxCols || expectedRows != values.size()) {
+        QMessageBox::warning(
+            this,
+            "提示",
+            QString("CSV数据尺寸(%1x%2)与头部坐标计算尺寸(%3x%4)不一致，将按可匹配范围导入。")
+                .arg(maxCols)
+                .arg(values.size())
+                .arg(expectedCols)
+                .arg(expectedRows));
+    }
+
+    int importRows = qMin(values.size(), expectedRows);
+    bool hasImportedRange = false;
+    float importedMinValue = 0.0f;
+    float importedMaxValue = 0.0f;
+    for (int row = 0; row < importRows; ++row) {
+        int importCols = qMin(values.at(row).size(), expectedCols);
+        for (int col = 0; col < importCols; ++col) {
+            if (col >= hasValues.at(row).size() || !hasValues.at(row).at(col))
+                continue;
+
+            float value = values.at(row).at(col);
+            if (!hasImportedRange) {
+                importedMinValue = value;
+                importedMaxValue = value;
+                hasImportedRange = true;
+            } else {
+                importedMinValue = qMin(importedMinValue, value);
+                importedMaxValue = qMax(importedMaxValue, value);
+            }
+        }
+    }
+
+    if (!hasImportedRange) {
+        QMessageBox::warning(this, "错误", "CSV可匹配范围内没有可导入的数据");
+        return;
+    }
+
+    m_kFocusMinValue = importedMinValue;
+    m_kFocusMaxValue = importedMaxValue;
+    if (m_kFocusMinValue >= m_kFocusMaxValue)
+        m_kFocusMaxValue = m_kFocusMinValue + 0.001;
+
+    ui.lineEdit_heatmapMinValue->setText(QString::number(m_kFocusMinValue, 'f', 3));
+    ui.lineEdit_heatmapMaxValue->setText(QString::number(m_kFocusMaxValue, 'f', 3));
+
+    ui.lineEdit_start_X->setText(QString::number(startX, 'g', 12));
+    ui.lineEdit_start_Y->setText(QString::number(startY, 'g', 12));
+    ui.lineEdit_end_X->setText(QString::number(endX, 'g', 12));
+    ui.lineEdit_end_Y->setText(QString::number(endY, 'g', 12));
+    ui.lineEdit_scanStep->setText(QString::number(scanStep, 'g', 12));
+
+    if (m_heatmapWidget) {
+        m_heatmapWidget->deleteLater();
+        m_heatmapWidget = NULL;
+    }
+
+    m_heatmapWidget = new HeatmapWidget(this, iMaxX, iMaxY, iMinX, iMinY, valueZoom, m_darkColor, m_lightColor);
+    m_heatmapWidget->setMinimumSize(800, 700);
+    if (m_kFocusMinValue < m_kFocusMaxValue)
+        m_heatmapWidget->setFocueValue(m_kFocusMinValue, m_kFocusMaxValue);
+    ui.hLayout_charts->addWidget(m_heatmapWidget);
+
+    if (m_diagram) {
+        m_diagram->deleteLater();
+        m_diagram = NULL;
+    }
+    m_diagram = new CoordinateDiagram(this);
+    m_diagram->setRenderArea(startX, startY, endX, endY);
+    ui.hLayout_map->addWidget(m_diagram);
+
+    m_data.clear();
+    for (int row = 0; row < importRows; ++row) {
+        int importCols = qMin(values.at(row).size(), expectedCols);
+        int y = iMinY + (expectedRows - 1 - row);
+        for (int col = 0; col < importCols; ++col) {
+            if (col >= hasValues.at(row).size() || !hasValues.at(row).at(col))
+                continue;
+
+            int x = iMinX + col;
+            float value = values.at(row).at(col);
+            DataPoint pt;
+            pt.x = x;
+            pt.y = y;
+            pt.value = value;
+            m_data.append(pt);
+            m_heatmapWidget->setGridValue(x, y, value);
+        }
+    }
+
+    QDateTime importedScanTime = QDateTime::fromString(scanTimeText, "yyyy-MM-dd hh:mm:ss");
+    m_scanStartTime = importedScanTime.isValid() ? importedScanTime : QDateTime::currentDateTime();
+    m_scanDataSaved = true;
+
+    QMessageBox::information(this, "成功", QString("CSV已导入: %1").arg(filePath));
 }
 
 bool TestPage::exportScanDataWithDialog()

@@ -222,7 +222,7 @@ signals:
 private slots:
 	void onScanStartClicked();
 	void on_btnImg_clicked();
-	void on_btnCSV_clicked();
+	void on_btnImportCSV_clicked();
 
 	void onDarkColorClicked();       // 新增
     void onLightColorClicked();      // 新增
@@ -230,7 +230,7 @@ private slots:
 	void textChangeScanCoord(const QString &);
 	void textChangeScanStep(const QString &);
 
-	void returnPressedScanCoord();
+	bool returnPressedScanCoord();
     void returnPressedScanCoordNew();
 	void returnPressedScanStep();
 
